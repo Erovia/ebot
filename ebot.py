@@ -195,4 +195,7 @@ class LidlDeals(object):
 			logging.error(f'Failed to fetch LidlPLus API: HTTP-{r.status-_code}: {r.reason}')
 
 
-bot.run(DISCORD_TOKEN)
+try:
+	bot.run(DISCORD_TOKEN)
+except discord.errors.LoginFailure as e:
+	logging.error(e)
