@@ -8,6 +8,7 @@ import sys
 import re
 from pathlib import Path
 import math
+import json
 
 import requests
 
@@ -18,13 +19,18 @@ import giphy_client
 
 import pymongo
 
+
+logging.basicConfig(format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s', level = logging.INFO)
+botlogger = logging.getLogger('ebot')
+
+
 ###########################################
 #
 try:
 	DISCORD_TOKEN = os.environ['DISCORD_TOKEN']
 	GIPHY_TOKEN = os.environ['GIPHY_TOKEN']
 except KeyError:
-	logging.error('Please make sure to pass the Discord API token (DISCORD_TOKEN) and the Giphy API token (G_TOKEN) as environmental variables!')
+	botlogger.error('Please make sure to pass the Discord API token (DISCORD_TOKEN) and the Giphy API token (G_TOKEN) as environmental variables!')
 	sys.exit(1)
 #
 LIDL_CHANNEL_ID = os.environ.get('LIDL_CHANNEL_ID', None)
@@ -40,12 +46,19 @@ if THE_LEGEND_DIR.is_dir():
 
 MONGO_SERVER = os.environ.get('MONGO_SERVER', None)
 MONGO_PORT = os.environ.get('MONGO_PORT', 27017)
-TACO_PEACH = re.compile(r'^\s*(<@[0-9]+>\s+)+🍑\s*$')
-TACO_EGGPLANT = re.compile(r'^\s*(<@[0-9]+>\s+)+🍆\s*$')
+TACO_EMOJI = os.environ.get('TACO_EMOJI', '🍆')
+TACO_REGEX = re.compile(fr'^\s*(<@[0-9]+>\s+)+{TACO_EMOJI}\s*')
+try:
+	NO_COOLDOWN_GROUPS = os.environ['NO_COOLDOWN_GROUPS']
+	NO_COOLDOWN_GROUPS = json.loads(NO_COOLDOWN_GROUPS)
+except KeyError:
+	# No "NO_COOLDOWN_GROUPS" environmental variable was provided, applying cooldowns to everyone'
+	NO_COOLDOWN_GROUPS = set()
+except json.decoder.JSONDecodeError:
+	botlogger.error('The provided "NO_COOLDOWN_GROUPS" environmental variable is an invalid JSON. The format is "NO_COOLDOWN_GROUPS=\'[1111, 2222]\'"')
+	sys.exit(3)
 ###########################################
 
-
-logging.basicConfig(format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s', level = logging.INFO)
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -58,7 +71,7 @@ mongo = pymongo.MongoClient(f'mongodb://{MONGO_SERVER}:{MONGO_PORT}')
 try:
 	mongo.admin.command('ping')
 except:
-	logging.error('Cannot connect to MongoDB')
+	botlogger.error('Cannot connect to MongoDB')
 	sys.exit(2)
 
 
@@ -79,18 +92,18 @@ def grab_random_seagal_gif():
 
 @bot.event
 async def on_ready():
-	logging.info(f'We have logged in as {bot.user}')
+	botlogger.info(f'We have logged in as {bot.user}')
 
 	if MONGO_SERVER:
-		logging.info('Adding Taco Cog...')
+		botlogger.info('Adding Taco Cog...')
 		try:
 			await bot.add_cog(Taco(bot))
 		except commands.CommandError:
-			logging.error('Error while loading Taco Cog!')
+			botlogger.error('Error while loading Taco Cog!')
 		else:
-			logging.info('Taco Cog is now running!')
+			botlogger.info('Taco Cog is now running!')
 	else:
-		logging.info('"MONGO_SERVER" env was not provided, skipping Taco Cog...')
+		botlogger.info('"MONGO_SERVER" env was not provided, skipping Taco Cog...')
 
 	# logging.info('Adding Pika Cog...')
 	# try:
@@ -137,6 +150,7 @@ async def foo(ctx, arg = None):
 class Taco(commands.Cog):
 	def __init__(self, bot):
 		self.init_cooldown()
+		self.logger = logging.getLogger('TacoCog')
 
 	@commands.Cog.listener()
 	async def on_message(self, message):
@@ -144,13 +158,11 @@ class Taco(commands.Cog):
 		if message.author.bot == False:
 			# breakpoint()
 			try:
-				if TACO_EGGPLANT.search(message.content):
-					logging.info('It\'s EGGPLANT time!!!')
-					self.mongo_increase(message)
-				elif TACO_PEACH.search(message.content):
-				# await logging.info(message.content)
-					logging.info('It\'s imPEACHment time!!!')
-					self.mongo_decrease(message)
+				if TACO_REGEX.search(message.content):
+					self.logger.info('It\'s TACO time!!!')
+					self.mongo_manage(message)
+				else:
+					self.logger.debug(f'"{message.author.name}" sent: {message.clean_content}')
 			except ValueError as e:
 				await message.reply(e)
 
@@ -170,12 +182,17 @@ class Taco(commands.Cog):
 		col.create_index('last_used', expireAfterSeconds = 15*60)
 
 	def check_if_user_has_cooldown(self, author):
-		logging.info(f'Checking if {author} is in cooldown...')
-		if [d for d in mongo['system']['cooldown'].find({'_id': author})]:
+		author_groups = {group.id for group in author.roles}
+		if author_groups.intersection(NO_COOLDOWN_GROUPS):
+			self.logger.info(f'{author.id} is in a group with no cooldown!')
+			return False
+		self.logger.info(f'Checking if {author.id} is in cooldown...')
+		if [d for d in mongo['system']['cooldown'].find({'_id': author.id})]:
 			raise ValueError('You recently used this feature, sit in a corner for a little...')
+		return True
 
 	def add_user_to_cooldown(self, author):
-		logging.info(f'Giving {author} a cooldown...')
+		self.logger.info(f'Giving {author} a cooldown...')
 		mongo['system']['cooldown'].insert_one({'_id': author, 'last_used': datetime.utcnow()})
 
 
@@ -183,27 +200,20 @@ class Taco(commands.Cog):
 		for user in message.mentions:
 			yield user.id
 
-	def mongo_manage(self, message, operation):
+	def mongo_manage(self, message):
 		db = mongo[f'{message.guild.id}']
 		col = db['tacos']
 		self.check_if_self_ping(message)
-		self.check_if_user_has_cooldown(message.author.id)
+		cooldown = self.check_if_user_has_cooldown(message.author)
 		self.check_for_bots(message)
 		for user in self.get_users(message):
-			logging.info(f'Adding {operation} tacos to {user}...')
-			resp = col.update_one({'_id': user, 'tacos': {'$gte': 1}}, {'$inc': {'tacos': operation}})
+			self.logger.info(f'Adding 1 tacos to {user}...')
+			resp = col.update_one({'_id': user, 'tacos': {'$gte': 1}}, {'$inc': {'tacos': 1}})
 			if resp.modified_count != 1:
-				try:
-					logging.info(f'First taco for {user}!')
-					resp = col.insert_one({'_id': user, 'tacos': 1})
-				except pymongo.errors.DuplicateKeyError:
-					logging.info('Nope, user just has 0 tacos.')
-					if operation == 1:
-						logging.info('Adding one...')
-						col.update_one({'_id': user}, {'$set': {'tacos': 1}})
-					else:
-						logging.info('Not doing anything.')
-		self.add_user_to_cooldown(message.author.id)
+				self.logger.info(f'First taco for {user}!')
+				resp = col.insert_one({'_id': user, 'tacos': 1})
+		if cooldown:
+			self.add_user_to_cooldown(message.author.id)
 
 
 	def check_if_self_ping(self, message):
@@ -213,22 +223,15 @@ class Taco(commands.Cog):
 	def check_for_bots(self, message):
 		for user in message.mentions:
 			if user.bot:
-				raise ValueError('Leave the bots out of your petty games!')
-
-
-	def mongo_increase(self, message):
-		self.mongo_manage(message, 1)
-
-
-	def mongo_decrease(self, message):
-		self.mongo_manage(message, -1)
+				raise ValueError('Leave the bots out of your games!')
 
 
 	async def print_leaderboard(self, message):
 		db = mongo[f'{message.guild.id}']
 		col = db['tacos']
 		ranking = [d for d in col.find().sort('tacos', pymongo.DESCENDING)]
-		embed = discord.Embed(title = 'Top 25 users with 🍆', colour = discord.Colour.dark_purple())
+		embed = discord.Embed(title = f'Top 25 users with {TACO_EMOJI}', colour = discord.Colour.dark_purple())
+		# embed = discord.Embed(title = 'Top 25 users with 🍆', colour = discord.Colour.dark_purple())
 		for user in ranking[:25]:
 			username = await bot.fetch_user(user['_id'])
 			embed.add_field(name = username, value = user['tacos'], inline = False)
@@ -325,4 +328,4 @@ class LidlDeals(object):
 try:
 	bot.run(DISCORD_TOKEN)
 except discord.errors.LoginFailure as e:
-	logging.error(e)
+	botlogger.error(e)
