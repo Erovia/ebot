@@ -46,10 +46,10 @@ if THE_LEGEND_DIR.is_dir():
 
 MONGO_SERVER = os.environ.get('MONGO_SERVER', None)
 MONGO_PORT = os.environ.get('MONGO_PORT', 27017)
-TACO_EMOJI = os.environ.get('TACO_EMOJI', '🍆')
-TACO_REGEX = re.compile(fr'^\s*(<@[0-9]+>\s+)+{TACO_EMOJI}\s*')
+TACO_EMOJI = os.environ.get('TACO_EMOJI', '🍆').strip("'")
+TACO_REGEX = re.compile(fr'^\s*(<@[0-9]+>\s+)+<:{TACO_EMOJI}:[0-9]+>\s*')
 try:
-	NO_COOLDOWN_GROUPS = os.environ['NO_COOLDOWN_GROUPS']
+	NO_COOLDOWN_GROUPS = os.environ['NO_COOLDOWN_GROUPS'].strip("'")
 	NO_COOLDOWN_GROUPS = json.loads(NO_COOLDOWN_GROUPS)
 except KeyError:
 	# No "NO_COOLDOWN_GROUPS" environmental variable was provided, applying cooldowns to everyone'
