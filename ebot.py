@@ -16,6 +16,7 @@ from discord.ext import commands, tasks
 
 import giphy_client
 
+import pymongo
 
 ###########################################
 #
@@ -36,6 +37,11 @@ THE_LEGEND_REGEX = re.compile(r'show\s+(me\s+)?the\s+legend!*', re.I)
 THE_LEGEND_DIR = Path('the_legend')
 if THE_LEGEND_DIR.is_dir():
 	THE_LEGEND_FILES = [file for file in THE_LEGEND_DIR.iterdir() if file.is_file()]
+
+MONGO_SERVER = os.environ.get('MONGO_SERVER', None)
+MONGO_PORT = os.environ.get('MONGO_PORT', 27017)
+TACO_PEACH = re.compile(r'^\s*(<@[0-9]+>\s+)+🍑\s*$')
+TACO_EGGPLANT = re.compile(r'^\s*(<@[0-9]+>\s+)+🍆\s*$')
 ###########################################
 
 
@@ -44,9 +50,16 @@ logging.basicConfig(format = '%(asctime)s - %(name)s - %(levelname)s - %(message
 intents = discord.Intents.default()
 intents.message_content = True
 
-bot = commands.Bot(intents = intents, command_prefix = commands.when_mentioned_or(""))
+bot = commands.Bot(intents = intents, command_prefix = commands.when_mentioned)
 
 api_instance = giphy_client.DefaultApi()
+
+mongo = pymongo.MongoClient(f'mongodb://{MONGO_SERVER}:{MONGO_PORT}')
+try:
+	mongo.admin.command('ping')
+except:
+	logging.error('Cannot connect to MongoDB')
+	sys.exit(2)
 
 
 def grab_random_gif(keyword):
@@ -68,24 +81,35 @@ def grab_random_seagal_gif():
 async def on_ready():
 	logging.info(f'We have logged in as {bot.user}')
 
-	logging.info('Adding Pika Cog...')
-	try:
-		await bot.add_cog(Pika(bot))
-	except commands.CommandError:
-		logging.error('Error while loading Pika Cog!')
-	else:
-		logging.info('Pika Cog is now running!')
-
-	if LIDL_CHANNEL_ID:
-		logging.info('Adding LidlPromo Cog...')
+	if MONGO_SERVER:
+		logging.info('Adding Taco Cog...')
 		try:
-			await bot.add_cog(LidlPromo(bot))
+			await bot.add_cog(Taco(bot))
 		except commands.CommandError:
-			logging.error('Error while loading LidlPromo Cog!')
+			logging.error('Error while loading Taco Cog!')
 		else:
-			logging.info('LidlPromo Cog is now running!')
+			logging.info('Taco Cog is now running!')
 	else:
-		logging.info('LIDL_CHANNEL_ID was not provided, skipping LidlPromo Cog...')
+		logging.info('"MONGO_SERVER" env was not provided, skipping Taco Cog...')
+
+	# logging.info('Adding Pika Cog...')
+	# try:
+	# 	await bot.add_cog(Pika(bot))
+	# except commands.CommandError:
+	# 	logging.error('Error while loading Pika Cog!')
+	# else:
+	# 	logging.info('Pika Cog is now running!')
+
+	# if LIDL_CHANNEL_ID:
+	# 	logging.info('Adding LidlPromo Cog...')
+	# 	try:
+	# 		await bot.add_cog(LidlPromo(bot))
+	# 	except commands.CommandError:
+	# 		logging.error('Error while loading LidlPromo Cog!')
+	# 	else:
+	# 		logging.info('LidlPromo Cog is now running!')
+	# else:
+	# 	logging.info('LIDL_CHANNEL_ID was not provided, skipping LidlPromo Cog...')
 
 
 @bot.command()
@@ -97,16 +121,119 @@ async def foo(ctx, arg = None):
 	await ctx.send(msg)
 
 
-@bot.event
-async def on_message(message):
-	if message.author.bot == False:
-		if bot.user.mentioned_in(message) and len(message.mentions) == 1:
-			if message.content == bot.user.mention:
-				await message.channel.send(f"Eeeey, what's up {message.author.mention}?")
-			elif question := SENTIENCE_REGEX.search(message.clean_content):
-				await message.channel.send(f'Indeed, I am {question.group(1)}!')
-			else:
-				await bot.process_commands(message)
+# @bot.event
+# async def on_message(message):
+# 	if message.author.bot == False:
+# 		if bot.user.mentioned_in(message) and len(message.mentions) == 1:
+# 			if message.content == bot.user.mention:
+# 				await message.channel.send(f"Eeeey, what's up {message.author.mention}?")
+# 			elif question := SENTIENCE_REGEX.search(message.clean_content):
+# 				await message.channel.send(f'Indeed, I am {question.group(1)}!')
+# 			else:
+# 				await bot.process_commands(message)
+
+
+###################################################################
+class Taco(commands.Cog):
+	def __init__(self, bot):
+		self.init_cooldown()
+
+	@commands.Cog.listener()
+	async def on_message(self, message):
+		msg = None
+		if message.author.bot == False:
+			# breakpoint()
+			try:
+				if TACO_EGGPLANT.search(message.content):
+					logging.info('It\'s EGGPLANT time!!!')
+					self.mongo_increase(message)
+				elif TACO_PEACH.search(message.content):
+				# await logging.info(message.content)
+					logging.info('It\'s imPEACHment time!!!')
+					self.mongo_decrease(message)
+			except ValueError as e:
+				await message.reply(e)
+
+
+	@commands.command()
+	async def leaderboard(self, message):
+		await self.print_leaderboard(message)
+
+
+#### Taco's helper functions
+	def init_cooldown(self):
+		db = mongo['system']
+		if 'cooldown' in db.list_collection_names():
+			col = db['cooldown']
+			col.drop()
+		col = db['cooldown']
+		col.create_index('last_used', expireAfterSeconds = 15*60)
+
+	def check_if_user_has_cooldown(self, author):
+		logging.info(f'Checking if {author} is in cooldown...')
+		if [d for d in mongo['system']['cooldown'].find({'_id': author})]:
+			raise ValueError('You recently used this feature, sit in a corner for a little...')
+
+	def add_user_to_cooldown(self, author):
+		logging.info(f'Giving {author} a cooldown...')
+		mongo['system']['cooldown'].insert_one({'_id': author, 'last_used': datetime.utcnow()})
+
+
+	def get_users(self, message):
+		for user in message.mentions:
+			yield user.id
+
+	def mongo_manage(self, message, operation):
+		db = mongo[f'{message.guild.id}']
+		col = db['tacos']
+		self.check_if_self_ping(message)
+		self.check_if_user_has_cooldown(message.author.id)
+		self.check_for_bots(message)
+		for user in self.get_users(message):
+			logging.info(f'Adding {operation} tacos to {user}...')
+			resp = col.update_one({'_id': user, 'tacos': {'$gte': 1}}, {'$inc': {'tacos': operation}})
+			if resp.modified_count != 1:
+				try:
+					logging.info(f'First taco for {user}!')
+					resp = col.insert_one({'_id': user, 'tacos': 1})
+				except pymongo.errors.DuplicateKeyError:
+					logging.info('Nope, user just has 0 tacos.')
+					if operation == 1:
+						logging.info('Adding one...')
+						col.update_one({'_id': user}, {'$set': {'tacos': 1}})
+					else:
+						logging.info('Not doing anything.')
+		self.add_user_to_cooldown(message.author.id)
+
+
+	def check_if_self_ping(self, message):
+		if message.author in message.mentions:
+			raise ValueError('Are you kidding me?')
+
+	def check_for_bots(self, message):
+		for user in message.mentions:
+			if user.bot:
+				raise ValueError('Leave the bots out of your petty games!')
+
+
+	def mongo_increase(self, message):
+		self.mongo_manage(message, 1)
+
+
+	def mongo_decrease(self, message):
+		self.mongo_manage(message, -1)
+
+
+	async def print_leaderboard(self, message):
+		db = mongo[f'{message.guild.id}']
+		col = db['tacos']
+		ranking = [d for d in col.find().sort('tacos', pymongo.DESCENDING)]
+		embed = discord.Embed(title = 'Top 25 users with 🍆', colour = discord.Colour.dark_purple())
+		for user in ranking[:25]:
+			username = await bot.fetch_user(user['_id'])
+			embed.add_field(name = username, value = user['tacos'], inline = False)
+		await message.reply(embed = embed)
+###################################################################
 
 
 class Pika(commands.Cog):

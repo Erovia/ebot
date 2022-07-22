@@ -1,3 +1,4 @@
 giphy-client==1.0.0
 requests==2.27.1
 ./discord.py
+pymongo==4.1.1
