@@ -168,8 +168,13 @@ class Taco(commands.Cog):
 
 
 	@commands.command()
-	async def leaderboard(self, message):
-		await self.print_leaderboard(message)
+	async def leaderboard(self, message, limit = 5):
+		await self.print_leaderboard(message, limit)
+
+	@leaderboard.error
+	async def leaderboard_error(self, message, error):
+		if isinstance(error, commands.errors.BadArgument):
+			await message.reply(f'"{message.current_argument}" is a positive integer since when?!')
 
 
 #### Taco's helper functions
@@ -226,13 +231,13 @@ class Taco(commands.Cog):
 				raise ValueError('Leave the bots out of your games!')
 
 
-	async def print_leaderboard(self, message):
+	async def print_leaderboard(self, message, limit):
 		db = mongo[f'{message.guild.id}']
 		col = db['tacos']
 		ranking = [d for d in col.find().sort('tacos', pymongo.DESCENDING)]
-		embed = discord.Embed(title = f'Top 25 users with {TACO_EMOJI}', colour = discord.Colour.dark_purple())
+		embed = discord.Embed(title = f'Top {limit} users with {TACO_EMOJI}', colour = discord.Colour.dark_purple())
 		# embed = discord.Embed(title = 'Top 25 users with 🍆', colour = discord.Colour.dark_purple())
-		for user in ranking[:25]:
+		for user in ranking[:limit]:
 			username = await bot.fetch_user(user['_id'])
 			embed.add_field(name = username, value = user['tacos'], inline = False)
 		await message.reply(embed = embed)
