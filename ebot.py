@@ -169,6 +169,8 @@ class Taco(commands.Cog):
 
 	@commands.command()
 	async def leaderboard(self, message, limit = 5):
+		if limit < 1:
+			raise commands.errors.BadArgument
 		await self.print_leaderboard(message, limit)
 
 	@leaderboard.error
