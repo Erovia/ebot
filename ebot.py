@@ -37,7 +37,6 @@ LIDL_CHANNEL_ID = os.environ.get('LIDL_CHANNEL_ID', None)
 FIRST_RUN = os.environ.get('FIRST_RUN', False)
 GIPHY_LIMIT = 25
 #
-SENTIENCE_REGEX = re.compile(r'[Aa]re\s+[Yy]ou\s+(.*)\?')
 
 THE_LEGEND_REGEX = re.compile(r'show\s+(me\s+)?the\s+legend!*', re.I)
 THE_LEGEND_DIR = Path('the_legend')
@@ -47,7 +46,7 @@ if THE_LEGEND_DIR.is_dir():
 MONGO_SERVER = os.environ.get('MONGO_SERVER', None)
 MONGO_PORT = os.environ.get('MONGO_PORT', 27017)
 TACO_EMOJI = os.environ.get('TACO_EMOJI', '🍆').strip("'")
-TACO_REGEX = re.compile(fr'^\s*(<@[0-9]+>\s+)+<:{TACO_EMOJI}:[0-9]+>\s*')
+TACO_REGEX = re.compile(fr'(^|\s+)(<@[0-9]+>\s+)+<?{TACO_EMOJI}([0-9]+>)?\s*')
 try:
 	NO_COOLDOWN_GROUPS = os.environ['NO_COOLDOWN_GROUPS'].strip("'")
 	NO_COOLDOWN_GROUPS = json.loads(NO_COOLDOWN_GROUPS)
@@ -62,6 +61,7 @@ except json.decoder.JSONDecodeError:
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True
 
 bot = commands.Bot(intents = intents, command_prefix = commands.when_mentioned)
 
@@ -73,21 +73,6 @@ try:
 except:
 	botlogger.error('Cannot connect to MongoDB')
 	sys.exit(2)
-
-
-def grab_random_gif(keyword):
-	api_response = api_instance.gifs_search_get(GIPHY_TOKEN, keyword, limit = GIPHY_LIMIT)
-	url = api_response.data[random.randrange(GIPHY_LIMIT)].images.downsized_small.mp4
-	logging.info(f'Grabbed random "{keyword}" image: {url}')
-	return url
-
-
-def grab_random_pika_gif():
-	return grab_random_gif('pikachu')
-
-
-def grab_random_seagal_gif():
-	return grab_random_gif('steven seagal')
 
 
 @bot.event
@@ -105,13 +90,13 @@ async def on_ready():
 	else:
 		botlogger.info('"MONGO_SERVER" env was not provided, skipping Taco Cog...')
 
-	# logging.info('Adding Pika Cog...')
-	# try:
-	# 	await bot.add_cog(Pika(bot))
-	# except commands.CommandError:
-	# 	logging.error('Error while loading Pika Cog!')
-	# else:
-	# 	logging.info('Pika Cog is now running!')
+	botlogger.info('Adding Egg Cog...')
+	try:
+		await bot.add_cog(Egg(bot))
+	except commands.CommandError:
+		botlogger.error('Error while loading Egg Cog!')
+	else:
+		botlogger.info('Egg Cog is now running!')
 
 	# if LIDL_CHANNEL_ID:
 	# 	logging.info('Adding LidlPromo Cog...')
@@ -125,25 +110,12 @@ async def on_ready():
 	# 	logging.info('LIDL_CHANNEL_ID was not provided, skipping LidlPromo Cog...')
 
 
-@bot.command()
-async def foo(ctx, arg = None):
-	if arg is None:
-		msg = 'What do you want dumdum?!'
+@bot.event
+async def on_command_error(ctx, error):
+	if isinstance(error, commands.errors.CommandNotFound):
+		await ctx.reply('Are you trying to initiate a standard human connection, fellow human?')
 	else:
-		msg = arg
-	await ctx.send(msg)
-
-
-# @bot.event
-# async def on_message(message):
-# 	if message.author.bot == False:
-# 		if bot.user.mentioned_in(message) and len(message.mentions) == 1:
-# 			if message.content == bot.user.mention:
-# 				await message.channel.send(f"Eeeey, what's up {message.author.mention}?")
-# 			elif question := SENTIENCE_REGEX.search(message.clean_content):
-# 				await message.channel.send(f'Indeed, I am {question.group(1)}!')
-# 			else:
-# 				await bot.process_commands(message)
+		raise error
 
 
 ###################################################################
@@ -156,7 +128,6 @@ class Taco(commands.Cog):
 	async def on_message(self, message):
 		msg = None
 		if message.author.bot == False:
-			# breakpoint()
 			try:
 				if TACO_REGEX.search(message.content):
 					self.logger.info('It\'s TACO time!!!')
@@ -246,34 +217,113 @@ class Taco(commands.Cog):
 ###################################################################
 
 
-class Pika(commands.Cog):
+###################################################################
+class Egg(commands.Cog):
+	def __init__(self, bot):
+		self.bot = bot
+		self.logger = logging.getLogger('EggCog')
+		self.YUGE_REGEX = re.compile(r'[h|y]u+ge', re.IGNORECASE)
+		self.MAYBE_REGEX = re.compile(r'ma+ybe', re.IGNORECASE)
+		self.COCOA_REGEX = re.compile(r'(^|\s)cocoa', re.IGNORECASE)
+		self.BAN_REGEX = re.compile(r'(^|\s)ban(\s|$)', re.IGNORECASE)
+		self.SENTIENCE_REGEX = re.compile(r'[Aa]re\s+[Yy]ou\s+(.*)\?')
+		self.YUGE_ID = 'l0HefZY0mFfLS9AFa'
+		self.MAYBE_ID = 'gZGlQX3wWAV1u'
+		self.SEAGAL_IDS = ('EjFx0jioOoMZq', 'CeMJ1CHY7CJMI', '53JRR3jD18vCw',
+                       'fs9BuKuLs7CQWerV1q', '3oz8xyu5a15nCQafq8', 'RxzDe6KVv9SJW',
+                       '26gJzhfjTvrFu4JuE', '3o6ZsYxFRLqno054GI', 'l0HlxPSpyojsTLjqM',
+                       'l0HlwcbDDfN8I9vhK', 'l0HlPhK8pemiFgF4k', '95wZBAoDFCNYQ',
+                       'l0HlJXtvGLbMQYjNS', '11BkowkONO4qGc', 'wcG2ivAWvpQs0',
+                       '13FOmRwAHCqLp6', '3o6Ztqb8VuN88HvI0o', 'l0HlJXtvGLbMQYjNS')
+		self.TIT_ID = 'uSGDIb6hP458c'
+		self.BOOBY_ID = 'EExgR4RJV0CM6nfeKQ'
+		self.BAN_IDS= ['CybZqG4etuZsA', '8FJCnrkqkyRzIswceT', 'HXcALJVPgaR4A',
+                   'C51woXfgJdug', 'fe4dDMD2cAU5RfEaCU']
+		self.GOODBYE_CHANNEL = os.environ.get('GOODBYE_CHANNEL', None)
+		if self.GOODBYE_CHANNEL:
+			try:
+				self.GOODBYE_CHANNEL = int(self.GOODBYE_CHANNEL)
+			except ValueError:
+				self.GOODBYE_CHANNEL = None
+				self.logger.error('The provide ID for "GOODBYE_CHANNEL" was not its numeric ID!')
+
+
 	@commands.Cog.listener()
 	async def on_message(self, message):
 		msg = None
 		if message.author.bot == False:
-			if asking_for_the_legend := THE_LEGEND_REGEX.search(message.clean_content) and 'THE_LEGEND_FILES' in globals() and isinstance(THE_LEGEND_FILES, list):
-				# Sending in multiple parts, as Discord only allows 10 images in one message
-				number_of_images = len(THE_LEGEND_FILES)
-				for batch in range(0, math.ceil(number_of_images / 10)):
-					try:
-						files = [discord.File(THE_LEGEND_FILES[i]) for i in range(10 * batch, 10 * batch + 10)]
-					except IndexError:
-						files = [discord.File(THE_LEGEND_FILES[i]) for i in range(10 * batch, number_of_images)]
-					await message.channel.send(files = files)
+			if bot.user.mentioned_in(message) and len(message.mentions) == 1:
+				if message.content == bot.user.mention:
+					await message.reply(f"Eeeey, what's up {message.author.mention}?")
+				elif question := self.SENTIENCE_REGEX.search(message.clean_content):
+					await message.reply(f'Indeed, I am {question.group(1)}!')
+			# if asking_for_the_legend := THE_LEGEND_REGEX.search(message.clean_content) and 'THE_LEGEND_FILES' in globals() and isinstance(THE_LEGEND_FILES, list):
+			# 	# Sending in multiple parts, as Discord only allows 10 images in one message
+			# 	number_of_images = len(THE_LEGEND_FILES)
+			# 	for batch in range(0, math.ceil(number_of_images / 10)):
+			# 		try:
+			# 			files = [discord.File(THE_LEGEND_FILES[i]) for i in range(10 * batch, 10 * batch + 10)]
+			# 		except IndexError:
+			# 			files = [discord.File(THE_LEGEND_FILES[i]) for i in range(10 * batch, number_of_images)]
+			# 		await message.channel.send(files = files)
 
-			elif 'pikapika' in message.content.lower():
-				msg = grab_random_pika_gif()
-
-			elif 'cocoa' in message.content.lower():
-				msg = grab_random_seagal_gif()
+			if self.COCOA_REGEX.search(message.content):
+				msg = self.grab_specific_gif(random.choice(self.SEAGAL_IDS))
+			elif self.YUGE_REGEX.search(message.content):
+				msg = self.grab_specific_gif(self.YUGE_ID)
+			elif self.MAYBE_REGEX.search(message.content):
+				msg = self.grab_specific_gif(self.MAYBE_ID)
+			elif 'tits' in message.clean_content or 'titties' in message.clean_content:
+				msg = self.grab_specific_gif(self.TIT_ID)
+			elif 'boobs' in message.clean_content or 'booby' in message.clean_content or 'boobies' in message.clean_content:
+				msg = self.grab_specific_gif(self.BOOBY_ID)
+			elif self.BAN_REGEX.search(message.content):
+				msg = self.grab_specific_gif(random.choice(self.BAN_IDS))
 
 		if msg:
 			await message.channel.send(msg)
 
+
+	def grab_random_gif(self, keyword):
+		api_response = api_instance.gifs_search_get(GIPHY_TOKEN, keyword, limit = GIPHY_LIMIT)
+		url = api_response.data[random.randrange(GIPHY_LIMIT)].images.downsized_small.mp4
+		self.logger.info(f'Grabbed random "{keyword}" image: {url}')
+		return url
+
+	def grab_specific_gif(self, gif_id):
+		api_response = api_instance.gifs_gif_id_get(GIPHY_TOKEN, gif_id)
+		url = api_response.data.images.downsized_small.mp4
+		self.logger.info(f'Grabbed "{gif_id}" image: {url}')
+		return url
+
+
+	@commands.Cog.listener()
+	async def on_member_remove(self, member):
+		if self.GOODBYE_CHANNEL:
+			self.logger.info(f'{member.id} left the server')
+			gif = self.grab_random_gif('sassy')
+			channel = self.bot.get_channel(self.GOODBYE_CHANNEL)
+			# breakpoint()
+			if channel:
+				await channel.send(f'Buh-bye, {member.name}!')
+				await channel.send(gif)
+			else:
+				self.logger.error(f'Channel "{self.GOODBYE_CHANNEL}" was not found!')
+		else:
+			self.logger.info('A member left, but no "GOODBYE_CHANNEL" was configured.')
+
+
 	@commands.command()
-	async def cocoa(self, ctx):
-		msg = grab_random_seagal_gif()
-		await ctx.send(msg)
+	async def foo(self, ctx, arg = None):
+		if arg is None:
+			msg = 'What do you want dumdum?! Here is a :chocolate_bar:.'
+			await ctx.reply(msg)
+
+	# @commands.command()
+	# async def cocoa(self, ctx):
+	# 	msg = grab_random_seagal_gif()
+	# 	await ctx.send(msg)
+###################################################################
 
 
 class LidlPromo(commands.Cog):
