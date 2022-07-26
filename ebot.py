@@ -132,6 +132,8 @@ class Taco(commands.Cog):
 				if TACO_REGEX.search(message.content):
 					self.logger.info('It\'s TACO time!!!')
 					self.mongo_manage(message)
+					await self.notify_sender(message)
+					await self.notify_recepients(message)
 				else:
 					self.logger.debug(f'"{message.author.name}" sent: {message.clean_content}')
 			except ValueError as e:
@@ -209,11 +211,22 @@ class Taco(commands.Cog):
 		col = db['tacos']
 		ranking = [d for d in col.find().sort('tacos', pymongo.DESCENDING)]
 		embed = discord.Embed(title = f'Top {limit} users with {TACO_EMOJI}', colour = discord.Colour.dark_purple())
-		# embed = discord.Embed(title = 'Top 25 users with 🍆', colour = discord.Colour.dark_purple())
 		for user in ranking[:limit]:
 			username = await bot.fetch_user(user['_id'])
 			embed.add_field(name = username, value = user['tacos'], inline = False)
 		await message.reply(embed = embed)
+
+
+	async def notify_sender(self, message):
+		self.logger.info(f'Sending taco confirmation to sender: {message.author.id}')
+		recepient_list = ', '.join([user.mention for user in message.mentions])
+		await message.author.send(f'You\'ve sent a token of appreciation to: {recepient_list}!')
+
+
+	async def notify_recepients(self, message):
+		for recepient in message.mentions:
+			self.logger.info(f'Sending taco confirmation to recepient: {recepient.id}')
+			await recepient.send(f'You\'ve received a token of appreciation from {message.author.mention}!')
 ###################################################################
 
 
