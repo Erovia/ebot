@@ -220,13 +220,13 @@ class Taco(commands.Cog):
 	async def notify_sender(self, message):
 		self.logger.info(f'Sending taco confirmation to sender: {message.author.id}')
 		recepient_list = ', '.join([user.mention for user in message.mentions])
-		await message.author.send(f'You\'ve sent a token of appreciation to: {recepient_list}!')
+		await message.author.send(f'You\'ve sent a token of appreciation to: {recepient_list}!\nIt all happened here: {message.jump_url}')
 
 
 	async def notify_recepients(self, message):
 		for recepient in message.mentions:
 			self.logger.info(f'Sending taco confirmation to recepient: {recepient.id}')
-			await recepient.send(f'You\'ve received a token of appreciation from {message.author.mention}!')
+			await recepient.send(f'You\'ve received a token of appreciation from {message.author.mention}!\nIt all happened here: {message.jump_url}')
 ###################################################################
 
 
