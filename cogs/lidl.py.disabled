@@ -1,0 +1,69 @@
+import logging
+from datetime import datetime
+import os
+
+import requests
+
+class LidlPromo(commands.Cog):
+	def __init__(self, bot, lidl_channel_id, first_run):
+		self.bot = bot
+		self.channel = bot.get_channel(int(lidl_channel_id))
+		self.first_run = first_run
+		if self.channel is None:
+			logging.error(f"Couldn't find channel with id '{lidl_channel_id}'")
+		else:
+			self.apicheck.start()
+
+	def cog_unload(self):
+		self.apicheck.cancel()
+
+	@tasks.loop(hours = 1.0)
+	async def apicheck(self):
+		current_date = datetime.now()
+		should_run = True if current_date.hour >= 6 and current_date.hour < 7 else False
+		if should_run or self.first_run:
+			logging.info('Querying the Lidl Plus API...')
+			lidl = LidlDeals()
+			lidl.update()
+			for deal in lidl:
+				embed = discord.Embed(title = deal['title'], color=discord.Color.dark_red())
+				embed.add_field(name = deal['offer'], value = deal['offer_desc'])
+				embed.set_image(url = deal['image'])
+
+				await self.channel.send(embed = embed)
+		else:
+			logging.info('API query goes back to sleep...')
+
+
+class LidlDeals(object):
+	def __init__(self, country_code = 'IE'):
+		self.country_code = country_code.upper()
+		self.url = f'https://coupons.lidlplus.com/api/v1/{self.country_code}/public'
+		logging.info(f'Will be using {self.url}')
+		self.deals = list()
+
+	def __iter__(self):
+		yield from self.deals
+
+	def update(self):
+		r = requests.get(self.url)
+		if r.ok:
+			deals = r.json()
+			today = datetime.today().date()
+			for deal in deals:
+				start_date = datetime.fromisoformat(deal['startValidityDate'].rstrip('Z')).date()
+				if start_date == today or self.first_run:
+					logging.info(f'Found deal: {deal["title"]}')
+					self.deals.append({'image': deal['image'], 'title': deal['title'], 'offer': deal['offerTitle'], 'offer_desc': deal['offerDescriptionShort']})
+			self.first_run = False
+		else:
+			logging.error(f'Failed to fetch LidlPLus API: HTTP-{r.status-_code}: {r.reason}')
+
+
+async def setup(bot):
+	try:
+		lidl_channel_id = os.environ['LIDL_CHANNEL_ID']
+		first_run = os.environ.get('FIRST_RUN', False)
+	except KeyError:
+		raise KeyError('Please make sure to pass the channel ID for the Lidl deals (LIDL_CHANNEL_I) as environmental variable!')
+	await bot.add_cog(LidlPromo(bot, lidl_channel_id, first_run))
