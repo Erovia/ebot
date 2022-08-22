@@ -88,13 +88,13 @@ class Egg(commands.Cog):
 	def grab_random_gif(self, keyword):
 		api_response = self.giphy.gifs_search_get(self.GIPHY_TOKEN, keyword, limit = self.GIPHY_LIMIT)
 		url = api_response.data[random.randrange(self.GIPHY_LIMIT)].images.downsized_small.mp4
-		self.logger.info(f'Grabbed random "{keyword}" image: {url}')
+		self.logger.debug(f'Grabbed random "{keyword}" image: {url}')
 		return url
 
 	def grab_specific_gif(self, gif_id):
 		api_response = self.giphy.gifs_gif_id_get(self.GIPHY_TOKEN, gif_id)
 		url = api_response.data.images.downsized_small.mp4
-		self.logger.info(f'Grabbed "{gif_id}" image: {url}')
+		self.logger.debug(f'Grabbed "{gif_id}" image: {url}')
 		return url
 
 

@@ -27,7 +27,7 @@ class Taco(commands.Cog):
 		if message.author.bot == False:
 			try:
 				if self.TACO_REGEX.search(message.content):
-					self.logger.info('It\'s TACO time!!!')
+					self.logger.debug('It\'s TACO time!!!')
 					self.mongo_manage(message)
 					await self.notify_sender(message)
 					await self.notify_recepients(message)
@@ -65,15 +65,15 @@ class Taco(commands.Cog):
 	def check_if_user_has_cooldown(self, author):
 		author_groups = {group.id for group in author.roles}
 		if author_groups.intersection(self.NO_COOLDOWN_GROUPS):
-			self.logger.info(f'{author.id} is in a group with no cooldown!')
+			self.logger.debug(f'{author.id} is in a group with no cooldown!')
 			return False
-		self.logger.info(f'Checking if {author.id} is in cooldown...')
+		self.logger.debug(f'Checking if {author.id} is in cooldown...')
 		if [d for d in self.mongo['system']['cooldown'].find({'_id': author.id})]:
 			raise ValueError('You recently used this feature, sit in a corner for a little...')
 		return True
 
 	def add_user_to_cooldown(self, author):
-		self.logger.info(f'Giving {author} a cooldown...')
+		self.logger.debug(f'Giving {author} a cooldown...')
 		self.mongo['system']['cooldown'].insert_one({'_id': author, 'last_used': datetime.utcnow()})
 
 
@@ -89,10 +89,10 @@ class Taco(commands.Cog):
 		self.check_for_bots(message)
 		cooldown = self.check_if_user_has_cooldown(message.author)
 		for user in self.get_users(message):
-			self.logger.info(f'Adding 1 tacos to {user}...')
+			self.logger.debug(f'Adding 1 tacos to {user}...')
 			resp = col.update_one({'_id': user, 'tacos': {'$gte': 1}}, {'$inc': {'tacos': 1}})
 			if resp.modified_count != 1:
-				self.logger.info(f'First taco for {user}!')
+				self.logger.debug(f'First taco for {user}!')
 				resp = col.insert_one({'_id': user, 'tacos': 1})
 		if cooldown:
 			self.add_user_to_cooldown(message.author.id)
@@ -121,14 +121,14 @@ class Taco(commands.Cog):
 
 
 	async def notify_sender(self, message):
-		self.logger.info(f'Sending taco confirmation to sender: {message.author.id}')
+		self.logger.debug(f'Sending taco confirmation to sender: {message.author.id}')
 		recepient_list = ', '.join([user.mention for user in message.mentions])
 		await message.author.send(f'You\'ve sent a token of appreciation to: {recepient_list}!\nIt all happened here: {message.jump_url}')
 
 
 	async def notify_recepients(self, message):
 		for recepient in message.mentions:
-			self.logger.info(f'Sending taco confirmation to recepient: {recepient.id}')
+			self.logger.debug(f'Sending taco confirmation to recepient: {recepient.id}')
 			await recepient.send(f'You\'ve received a token of appreciation from {message.author.mention}!\nIt all happened here: {message.jump_url}')
 
 
