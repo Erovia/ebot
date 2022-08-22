@@ -15,7 +15,8 @@ class Taco(commands.Cog):
 		self.mongo = mongo
 		self.NO_COOLDOWN_GROUPS = no_cooldown_groups
 		self.init_cooldown()
-		self.logger = logging.getLogger('TacoCog')
+		botlogger = logging.getLogger('ebot')
+		self.logger = botlogger.getChild('TacoCog')
 		self.TACO_EMOJI = taco_emoji
 		self.TACO_REGEX = re.compile(fr'(^|\s+)(<@[0-9]+>\s+)+<?{self.TACO_EMOJI}([0-9]+>)?\s*')
 

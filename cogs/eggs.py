@@ -14,7 +14,8 @@ import giphy_client
 class Egg(commands.Cog):
 	def __init__(self, bot, giphy_token):
 		self.bot = bot
-		self.logger = logging.getLogger('EggCog')
+		botlogger = logging.getLogger('ebot')
+		self.logger = botlogger.getChild('EggCog')
 		self.GIPHY_TOKEN = giphy_token
 		self.GIPHY_LIMIT = 25
 		self.giphy = giphy_client.DefaultApi()
