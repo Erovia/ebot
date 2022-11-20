@@ -2,6 +2,7 @@ import logging
 import re
 import os
 import json
+from random import choice
 
 import discord
 from discord.ext import commands
@@ -10,15 +11,17 @@ import pymongo
 
 
 class Taco(commands.Cog):
-	def __init__(self, bot, mongo, taco_emoji, no_cooldown_groups):
+	def __init__(self, bot, mongo, taco_emoji, no_cooldown_groups, sassy_reply_users):
 		self.bot = bot
 		self.mongo = mongo
 		self.NO_COOLDOWN_GROUPS = no_cooldown_groups
+		self.SASSY_REPLY_USERS = sassy_reply_users
 		self.init_cooldown()
 		botlogger = logging.getLogger('ebot')
 		self.logger = botlogger.getChild('TacoCog')
 		self.TACO_EMOJI = taco_emoji
 		self.TACO_REGEX = re.compile(fr'(^|\s+)(<@[0-9]+>\s+)+<?{self.TACO_EMOJI}([0-9]+>)?\s*')
+		self.SASSY_RESPONSES = ('Bruh...', f'My creator gave on the idea of explaining this to you, so let me give it a try:\n\n@name {self.TACO_EMOJI} Any optional message', 'Let\'s give this another shot, shall we?', 'Seriously?', '(‡ಠ╭╮ಠ)')
 
 
 	@commands.Cog.listener('on_message')
@@ -31,6 +34,9 @@ class Taco(commands.Cog):
 					self.mongo_manage(message)
 					await self.notify_sender(message)
 					await self.notify_recepients(message)
+				elif self.SASSY_REPLY_USERS and message.author.id in self.SASSY_REPLY_USERS and len(message.mentions) > 0 and self.TACO_EMOJI in message.content:
+					self.logger.debug('It\'s sassyness time!!!')
+					await self.send_sassy_reply(message)
 				else:
 					self.logger.debug(f'"{message.author.name}" sent: {message.clean_content}')
 			except ValueError as e:
@@ -132,15 +138,29 @@ class Taco(commands.Cog):
 			await recepient.send(f'You\'ve received a token of appreciation from {message.author.mention}!\nIt all happened here: {message.jump_url}')
 
 
+	async def send_sassy_reply(self, message):
+		self.logger.debug(f'User {message.author.id} did not use the correct taco sending format, sending sassy response.')
+		await message.reply(choice(self.SASSY_RESPONSES))
+
+
 async def setup(bot):
 	try:
 		no_cooldown_groups = os.environ['NO_COOLDOWN_GROUPS'].strip("'")
 		no_cooldown_groups = json.loads(no_cooldown_groups)
 	except KeyError:
-		# No "NO_COOLDOWN_GROUPS" environmental variable was provided, applying cooldowns to everyone'
+		# No "NO_COOLDOWN_GROUPS" environmental variable was provided, applying cooldowns to everyone
 		no_cooldown_groups = set()
 	except json.decoder.JSONDecodeError:
 		raise KeyError('The provided "NO_COOLDOWN_GROUPS" environmental variable is an invalid JSON. The format is "NO_COOLDOWN_GROUPS=\'[1111, 2222]\'"')
+
+	try:
+		sassy_reply_users = os.environ['SASSY_REPLY_USERS'].strip("'")
+		sassy_reply_users = json.loads(sassy_reply_users)
+	except KeyError:
+		# No "SASSY_REPLY_USERS" environmental variable was provided, not using sassyness
+		sassy_reply_users = set()
+	except json.decoder.JSONDecodeError:
+		raise KeyError('The provided "SASSY_REPLY_USERS" environmental variable is an invalid JSON. The format is "SASSY_REPLY_USERS=\'[1111, 2222]\'"')
 
 	try:
 		MONGO_SERVER = os.environ.get('MONGO_SERVER', None)
@@ -151,4 +171,4 @@ async def setup(bot):
 		mongo.admin.command('ping')
 	except:
 		raise KeyError('Cannot connect to MongoDB')
-	await bot.add_cog(Taco(bot, mongo, taco_emoji, no_cooldown_groups))
+	await bot.add_cog(Taco(bot, mongo, taco_emoji, no_cooldown_groups, sassy_reply_users))
