@@ -113,9 +113,8 @@ class Taco(commands.Cog):
 
 
 	def check_for_bots(self, message):
-		for user in message.mentions:
-			if user.bot:
-				raise ValueError('Leave the bots out of your games!')
+		if any([user.bot for user in message.mentions]):
+			raise ValueError('Leave the bots out of your games!')
 
 
 	async def print_leaderboard(self, message, limit):
