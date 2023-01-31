@@ -3,6 +3,7 @@ import re
 import os
 import json
 from random import choice
+from datetime import datetime, timezone
 
 import discord
 from discord.ext import commands
@@ -80,7 +81,7 @@ class Taco(commands.Cog):
 
 	def add_user_to_cooldown(self, author):
 		self.logger.debug(f'Giving {author} a cooldown...')
-		self.mongo['system']['cooldown'].insert_one({'_id': author, 'last_used': datetime.utcnow()})
+		self.mongo['system']['cooldown'].insert_one({'_id': author, 'last_used': datetime.now(timezone.utc)})
 
 
 	def get_users(self, message):
