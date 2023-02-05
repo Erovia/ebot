@@ -22,7 +22,7 @@ class Taco(commands.Cog):
 		self.logger = botlogger.getChild('TacoCog')
 		self.TACO_EMOJI = taco_emoji
 		self.TACO_REGEX = re.compile(fr'(^|\s+)(<@[0-9]+>\s+)+<?{self.TACO_EMOJI}([0-9]+>)?\s*')
-		self.SASSY_RESPONSES = ('Bruh...', f'My creator gave on the idea of explaining this to you, so let me give it a try:\n\n@name {self.TACO_EMOJI} Any optional message', 'Let\'s give this another shot, shall we?', 'Seriously?', '(‡ಠ╭╮ಠ)')
+		self.SASSY_RESPONSES = ('Bruh...', f'My creator gave on up the idea of explaining this to you, so let me give it a try:\n\n@name {self.TACO_EMOJI} Any optional message', 'Let\'s give this another shot, shall we?', 'Seriously?', '(‡ಠ╭╮ಠ)')
 
 
 	@commands.Cog.listener('on_message')
