@@ -17,7 +17,6 @@ class Taco(commands.Cog):
 		self.mongo = mongo
 		self.NO_COOLDOWN_GROUPS = no_cooldown_groups
 		self.SASSY_REPLY_USERS = sassy_reply_users
-		self.init_cooldown()
 		botlogger = logging.getLogger('ebot')
 		self.logger = botlogger.getChild('TacoCog')
 		self.TACO_EMOJI = taco_emoji
@@ -63,27 +62,24 @@ class Taco(commands.Cog):
 
 
 #### Taco's helper functions
-	def init_cooldown(self):
-		db = self.mongo['system']
-		if 'cooldown' in db.list_collection_names():
+	def _init_cooldown(self, db):
+		if 'cooldown' not in db.list_collection_names():
 			col = db['cooldown']
-			col.drop()
-		col = db['cooldown']
-		col.create_index('last_used', expireAfterSeconds = 15*60)
+			col.create_index('last_used', expireAfterSeconds = 15*60)
 
-	def check_if_user_has_cooldown(self, author):
+	def check_if_user_has_cooldown(self, db, author):
 		author_groups = {group.id for group in author.roles}
 		if author_groups.intersection(self.NO_COOLDOWN_GROUPS):
 			self.logger.debug(f'{author.id} is in a group with no cooldown!')
 			return False
 		self.logger.debug(f'Checking if {author.id} is in cooldown...')
-		if [d for d in self.mongo['system']['cooldown'].find({'_id': author.id})]:
+		if [d for d in db['cooldown'].find({'_id': author.id})]:
 			raise ValueError('You recently used this feature, sit in a corner for a little...')
 		return True
 
-	def add_user_to_cooldown(self, author):
+	def add_user_to_cooldown(self, db, author):
 		self.logger.debug(f'Giving {author} a cooldown...')
-		self.mongo['system']['cooldown'].insert_one({'_id': author, 'last_used': datetime.now(timezone.utc)})
+		db['cooldown'].insert_one({'_id': author, 'last_used': datetime.now(timezone.utc)})
 
 
 	def get_users(self, message):
@@ -92,11 +88,12 @@ class Taco(commands.Cog):
 
 
 	def mongo_manage(self, message):
-		db = self.mongo[f'{message.guild.id}']
-		col = db['tacos']
 		self.check_if_self_ping(message)
 		self.check_for_bots(message)
-		cooldown = self.check_if_user_has_cooldown(message.author)
+		db = self.mongo[f'{message.guild.id}']
+		self._init_cooldown(db)
+		col = db['tacos']
+		cooldown = self.check_if_user_has_cooldown(db, message.author)
 		for user in self.get_users(message):
 			self.logger.debug(f'Adding 1 tacos to {user}...')
 			resp = col.update_one({'_id': user, 'tacos': {'$gte': 1}}, {'$inc': {'tacos': 1}})
@@ -104,7 +101,7 @@ class Taco(commands.Cog):
 				self.logger.debug(f'First taco for {user}!')
 				resp = col.insert_one({'_id': user, 'tacos': 1})
 		if cooldown:
-			self.add_user_to_cooldown(message.author.id)
+			self.add_user_to_cooldown(db, message.author.id)
 
 
 	def check_if_self_ping(self, message):
