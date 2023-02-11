@@ -12,29 +12,30 @@ import pymongo
 
 
 class Taco(commands.Cog):
-	def __init__(self, bot, mongo, taco_emoji, no_cooldown_groups, sassy_reply_users):
+	def __init__(self, bot, mongo, emojis, no_cooldown_groups, sassy_reply_users):
 		self.bot = bot
 		self.mongo = mongo
 		self.NO_COOLDOWN_GROUPS = no_cooldown_groups
 		self.SASSY_REPLY_USERS = sassy_reply_users
 		botlogger = logging.getLogger('ebot')
 		self.logger = botlogger.getChild('TacoCog')
-		self.TACO_EMOJI = taco_emoji
-		self.TACO_REGEX = re.compile(fr'(^|\s+)(<@[0-9]+>\s+)+<?{self.TACO_EMOJI}([0-9]+>)?\s*')
-		self.SASSY_RESPONSES = ('Bruh...', f'My creator gave on up the idea of explaining this to you, so let me give it a try:\n\n@name {self.TACO_EMOJI} Any optional message', 'Let\'s give this another shot, shall we?', 'Seriously?', '(‡ಠ╭╮ಠ)')
+		self.EMOJI_MAP = self._emoji_mapper(emojis)
+		self.SASSY_RESPONSES = ('Bruh...', 'My creator gave on up the idea of explaining this to you, so let me give it a try:\n\n@name <placeholder_for_emoji> Any optional message', 'Let\'s give this another shot, shall we?', 'Seriously?', '(‡ಠ╭╮ಠ)')
 
 
 	@commands.Cog.listener('on_message')
 	async def watching_out_for_tacos(self, message):
-		msg = None
 		if message.author.bot == False:
+			msg = None
+			server = message.guild.id
 			try:
-				if self.TACO_REGEX.search(message.content):
+				regex = self.EMOJI_MAP[server]['regex'] if server in self.EMOJI_MAP else self.EMOJI_MAP['default']['regex']
+				if regex.search(message.content):
 					self.logger.debug('It\'s TACO time!!!')
 					self.mongo_manage(message)
 					await self.notify_sender(message)
 					await self.notify_recepients(message)
-				elif self.SASSY_REPLY_USERS and message.author.id in self.SASSY_REPLY_USERS and len(message.mentions) > 0 and self.TACO_EMOJI in message.content:
+				elif self.SASSY_REPLY_USERS and message.author.id in self.SASSY_REPLY_USERS and len(message.mentions) > 0 and self.EMOJI_MAP[server]['emoji'] in message.content:
 					self.logger.debug('It\'s sassyness time!!!')
 					await self.send_sassy_reply(message)
 				else:
@@ -62,6 +63,15 @@ class Taco(commands.Cog):
 
 
 #### Taco's helper functions
+	def _emoji_mapper(self, emojis):
+		emoji_map = dict()
+		emojis['default'] = '🍆'
+		for server, emoji in emojis.items():
+			regex = re.compile(fr'(^|\s+)(<@[0-9]+>\s+)+<?{emoji}([0-9]+>)?\s*')
+			server = int(server) if server.isnumeric() else server
+			emoji_map[server] = {'emoji': emoji, 'regex': regex}
+		return emoji_map
+
 	def _init_cooldown(self, db):
 		if 'cooldown' not in db.list_collection_names():
 			col = db['cooldown']
@@ -115,10 +125,12 @@ class Taco(commands.Cog):
 
 
 	async def print_leaderboard(self, message, limit):
-		db = self.mongo[f'{message.guild.id}']
+		server = message.guild.id
+		db = self.mongo[f'{server}']
 		col = db['tacos']
 		ranking = [d for d in col.find().sort('tacos', pymongo.DESCENDING)]
-		embed = discord.Embed(title = f'Top {limit} users with {self.TACO_EMOJI}', colour = discord.Colour.dark_purple())
+		emoji = self.EMOJI_MAP[server]['emoji'] if server in self.EMOJI_MAP else self.EMOJI_MAP['default']['emoji']
+		embed = discord.Embed(title = f'Top {limit} users with {emoji}', colour = discord.Colour.dark_purple())
 		for user in ranking[:limit]:
 			username = await self.bot.fetch_user(user['_id'])
 			embed.add_field(name = username, value = user['tacos'], inline = False)
@@ -162,12 +174,21 @@ async def setup(bot):
 		raise KeyError('The provided "SASSY_REPLY_USERS" environmental variable is an invalid JSON. The format is "SASSY_REPLY_USERS=\'[1111, 2222]\'"')
 
 	try:
+		emojis = os.environ['EMOJIS'].strip("'")
+		emojis = json.loads(emojis)
+	except KeyError:
+		# No "EMOJIS" environmental variable was provided, the default will be used for every server
+		emojis = dict()
+	except json.decoder.JSONDecodeError:
+		raise KeyError('The provided "EMOJIS" environmental variable is an invalid JSON. The format is "\'{"server1_id": "emoji1", "server2_id": "emoji2"}\'"')
+	
+
+	try:
 		MONGO_SERVER = os.environ.get('MONGO_SERVER', None)
 		MONGO_PORT = os.environ.get('MONGO_PORT', 27017)
-		taco_emoji = os.environ.get('TACO_EMOJI', '🍆').strip("'")
 
 		mongo = pymongo.MongoClient(f'mongodb://{MONGO_SERVER}:{MONGO_PORT}')
 		mongo.admin.command('ping')
 	except:
 		raise KeyError('Cannot connect to MongoDB')
-	await bot.add_cog(Taco(bot, mongo, taco_emoji, no_cooldown_groups, sassy_reply_users))
+	await bot.add_cog(Taco(bot, mongo, emojis, no_cooldown_groups, sassy_reply_users))
