@@ -25,7 +25,7 @@ class Taco(commands.Cog):
 
 	@commands.Cog.listener('on_message')
 	async def watching_out_for_tacos(self, message):
-		if message.author.bot == False:
+		if message.author.bot == False and not isinstance(message.channel, discord.channel.DMChannel):
 			msg = None
 			server = message.guild.id
 			try:
