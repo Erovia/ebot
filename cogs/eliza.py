@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+from time import sleep
+import random
 import os
 import sys
 
@@ -71,7 +73,10 @@ class ElizaCog(commands.Cog):
 			if not self.bot.user.mentioned_in(message):
 				if self.SESSIONS.get(message.author.id, False):
 					self.SESSIONS[message.author.id]['last_activity'] = datetime.now(timezone.utc)
-					await message.reply(self.SESSIONS[message.author.id]['eliza'].respond(message.clean_content))
+					async with message.channel.typing():
+						# Instead of replying instantly, wait a little and make it more human-like
+						sleep(random.randrange(2))
+						await message.reply(self.SESSIONS[message.author.id]['eliza'].respond(message.clean_content))
 
 
 async def setup(bot):
