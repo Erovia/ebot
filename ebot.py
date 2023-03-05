@@ -26,26 +26,32 @@ except KeyError:
 ###########################################
 
 
+class eBot(commands.Bot):
+	# Custom Bot class so we can load our cogs before the bot logs in
+	async def setup_hook(self):
+		botlogger.info('Loading cogs...')
+		for cog in [cog.stem for cog in Path('cogs').iterdir() if cog.is_file() and cog.suffix == '.py']:
+			try:
+				botlogger.info(f'Adding "{cog}" Cog...')
+				await bot.load_extension(f'cogs.{cog}')
+			except commands.errors.ExtensionFailed as e:
+				botlogger.error(f'Error while loading "{cog}" Cog!\n{e}')
+			else:
+				botlogger.info(f'"{cog}" Cog is now running!')
+
+
 intents = discord.Intents.default()
 intents.message_content = True
 # intents.members = True
 
-bot = commands.Bot(intents = intents, command_prefix = commands.when_mentioned)
+bot = eBot(intents = intents, command_prefix = commands.when_mentioned)
 
 
 @bot.event
 async def on_ready():
 	botlogger.info(f'We have logged in as {bot.user}')
-
-	botlogger.info('Loading cogs...')
-	for cog in [cog.stem for cog in Path('cogs').iterdir() if cog.is_file() and cog.suffix == '.py']:
-		try:
-			botlogger.info(f'Adding "{cog}" Cog...')
-			await bot.load_extension(f'cogs.{cog}')
-		except commands.errors.ExtensionFailed as e:
-			botlogger.error(f'Error while loading "{cog}" Cog!\n{e}')
-		else:
-			botlogger.info(f'"{cog}" Cog is now running!')
+	sync = await bot.tree.sync()
+	botlogger.info(f'Synced {len(sync)} commands')
 
 
 @bot.event
