@@ -3,10 +3,14 @@ import re
 import random
 import sys
 import os
+import io
+import base64
+from pathlib import Path
 # import math
 
-# import discord
+import discord
 from discord.ext import commands
+from discord import app_commands
 
 import giphy_client
 
@@ -32,6 +36,8 @@ class Egg(commands.Cog):
                        'l0HlwcbDDfN8I9vhK', 'l0HlPhK8pemiFgF4k', '95wZBAoDFCNYQ',
                        'l0HlJXtvGLbMQYjNS', '11BkowkONO4qGc', 'wcG2ivAWvpQs0',
                        '13FOmRwAHCqLp6', '3o6Ztqb8VuN88HvI0o', 'l0HlJXtvGLbMQYjNS')
+		fav_file = Path('data') / 'fav.b64'
+		self.FAVOURITE = fav_file.read_text() if fav_file.is_file() else None
 		# self.TIT_ID = 'uSGDIb6hP458c'
 		# self.BOOBY_ID = 'EExgR4RJV0CM6nfeKQ'
 		# self.BAN_IDS= ['CybZqG4etuZsA', '8FJCnrkqkyRzIswceT', 'HXcALJVPgaR4A',
@@ -118,6 +124,13 @@ class Egg(commands.Cog):
 		if arg is None:
 			msg = 'What do you want dumdum?! Here is a :chocolate_bar:.'
 			await ctx.reply(msg)
+
+
+	@app_commands.command(description = 'Check who is my favourite Discord user is at the moment.')
+	async def favourite(self, interaction):
+		if self.FAVOURITE:
+			file = discord.File(io.BytesIO(base64.b64decode(self.FAVOURITE)), filename = 'you.jpg')
+			await interaction.response.send_message("Let's keep this between us :shushing_face:", file = file, ephemeral = True, delete_after = 30)
 
 
 async def setup(bot):
