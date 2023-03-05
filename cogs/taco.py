@@ -128,12 +128,13 @@ class Taco(commands.Cog):
 		server = message.guild.id
 		db = self.mongo[f'{server}']
 		col = db['tacos']
-		ranking = [d for d in col.find().sort('tacos', pymongo.DESCENDING)]
+		ranking = [d for d in col.find().sort('tacos', pymongo.DESCENDING).limit(limit)]
 		emoji = self.EMOJI_MAP[server]['emoji'] if server in self.EMOJI_MAP else self.EMOJI_MAP['default']['emoji']
 		embed = discord.Embed(title = f'Top {limit} users with {emoji}', colour = discord.Colour.dark_purple())
-		for user in ranking[:limit]:
-			username = await self.bot.fetch_user(user['_id'])
-			embed.add_field(name = username, value = user['tacos'], inline = False)
+		async with message.typing():
+			for user in ranking:
+				username = await self.bot.fetch_user(user['_id'])
+				embed.add_field(name = username, value = user['tacos'], inline = False)
 		await message.reply(embed = embed)
 
 
