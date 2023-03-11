@@ -84,7 +84,9 @@ class Taco(commands.Cog):
 			return False
 		self.logger.debug(f'Checking if {author.id} is in cooldown...')
 		if [d for d in db['cooldown'].find({'_id': author.id})]:
+			self.logger.debug(f'{author.id} has cooldown.')
 			raise ValueError('You recently used this feature, sit in a corner for a little...')
+		self.logger.debug(f'{author.id} has no cooldown.')
 		return True
 
 	def add_user_to_cooldown(self, db, author):
