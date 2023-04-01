@@ -4,11 +4,19 @@ import os
 import json
 from random import choice
 from datetime import datetime, timezone
+from enum import StrEnum
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 
 import pymongo
+
+
+class Boards(StrEnum):
+	# The available leaderboards
+	receivers = 'tacos'
+	givers = 'given'
 
 
 class Taco(commands.Cog):
@@ -43,24 +51,17 @@ class Taco(commands.Cog):
 			except ValueError as e:
 				await message.reply(e)
 
-
 	@commands.command()
-	async def leaderboard(self, message, limit = 5):
-		if limit < 1:
-			raise commands.errors.BadArgument
-		if limit > 50:
-			limit = 50
-		await self.print_leaderboard(message, limit)
+	@commands.guild_only()
+	async def leaderboard(self, message):
+		await message.reply('Please use the new slash command:\n**/leaderboard**')
 
-	@leaderboard.error
-	async def leaderboard_error(self, ctx, error):
-		if isinstance(error, commands.errors.BadArgument):
-			#TODO: Figure out why traceback is still printed on console for BadArgument exceptions
-			#      Found only this relevant thread, but did not help: https://stackoverflow.com/a/58713699
-			await ctx.reply(f'"{ctx.current_argument}" is a positive integer since when?!')
-		else:
-			raise error
-
+	@app_commands.command(name = 'leaderboard', description = 'Check the leaderboards')
+	@app_commands.guild_only()
+	@app_commands.describe(board = 'Which board would you like to see?')
+	@app_commands.describe(top = 'Number of users to show')
+	async def leaderboard_command(self, interaction, board: Boards = Boards['receivers'], top: int = 5):
+		await self.print_leaderboard(interaction, board, top)
 
 #### Taco's helper functions
 	def _emoji_mapper(self, emojis):
@@ -106,12 +107,20 @@ class Taco(commands.Cog):
 		self._init_cooldown(db)
 		col = db['tacos']
 		cooldown = self.check_if_user_has_cooldown(db, message.author)
+		# Increasing taco number for awarded users
 		for user in self.get_users(message):
 			self.logger.debug(f'Adding 1 tacos to {user}...')
-			resp = col.update_one({'_id': user, 'tacos': {'$gte': 1}}, {'$inc': {'tacos': 1}})
+			resp = col.update_one({'_id': user}, {'$inc': {'tacos': 1}})
 			if resp.modified_count != 1:
-				self.logger.debug(f'First taco for {user}!')
-				resp = col.insert_one({'_id': user, 'tacos': 1})
+				self.logger.debug(f'First time seeing {user}! They were given a taco.')
+				resp = col.insert_one({'_id': user, 'tacos': 1, 'given': 0})
+		# Increasing given number to awarding user
+		awardees = len(message.mentions)
+		self.logger.debug(f'Adding {awardees} given for {message.author.id}...')
+		resp = col.update_one({'_id': message.author.id}, {'$inc': {'given': awardees}})
+		if resp.modified_count != 1:
+			self.logger.debug(f'First time seeing {message.author.id}! There were giving out tacos.')
+			resp = col.insert_one({'_id': message.author.id, 'tacos': 0, 'given': awardees})
 		if cooldown:
 			self.add_user_to_cooldown(db, message.author.id)
 
@@ -126,18 +135,24 @@ class Taco(commands.Cog):
 			raise ValueError('Leave the bots out of your games!')
 
 
-	async def print_leaderboard(self, message, limit):
-		server = message.guild.id
+	async def print_leaderboard(self, interaction, board, limit):
+		if limit > 50:
+			limit = 50
+		elif limit < 0:
+			limit *= -1
+		await interaction.response.defer(thinking = True)
+		server = interaction.guild.id
 		db = self.mongo[f'{server}']
 		col = db['tacos']
-		ranking = [d for d in col.find().sort('tacos', pymongo.DESCENDING).limit(limit)]
+		ranking = [d for d in col.find().sort(board.value, pymongo.DESCENDING).limit(limit)]
 		emoji = self.EMOJI_MAP[server]['emoji'] if server in self.EMOJI_MAP else self.EMOJI_MAP['default']['emoji']
-		embed = discord.Embed(title = f'Top {limit} users with {emoji}', colour = discord.Colour.dark_purple())
-		async with message.typing():
-			for user in ranking:
+		title = f'Top {limit} users with {emoji}' if board.value == 'tacos' else f'Top {limit} {emoji} givers'
+		embed = discord.Embed(title = title, colour = discord.Colour.dark_purple())
+		for user in ranking:
+			if user[board.value] > 0:
 				username = await self.bot.fetch_user(user['_id'])
-				embed.add_field(name = username, value = user['tacos'], inline = False)
-		await message.reply(embed = embed)
+				embed.add_field(name = username, value = user[board.value], inline = False)
+		await interaction.followup.send(embed = embed)
 
 
 	async def notify_sender(self, message):
@@ -184,7 +199,7 @@ async def setup(bot):
 		emojis = dict()
 	except json.decoder.JSONDecodeError:
 		raise KeyError('The provided "EMOJIS" environmental variable is an invalid JSON. The format is "\'{"server1_id": "emoji1", "server2_id": "emoji2"}\'"')
-	
+
 
 	try:
 		MONGO_SERVER = os.environ.get('MONGO_SERVER', None)
