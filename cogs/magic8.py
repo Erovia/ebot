@@ -20,7 +20,7 @@ class Magic8Cog(commands.Cog):
 		embed.add_field(name = f'{interaction.user.name} asked:', value = question, inline = False)
 		embed.add_field(name = 'The magic 8 ball says:', value = random.choice(self.ANSWERS), inline = False)
 		embed.set_thumbnail(url = 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/eb/Magic_eight_ball.png/240px-Magic_eight_ball.png')
-		await interaction.response.send_message(embed = embed, ephemeral = True)
+		await interaction.response.send_message(embed = embed)
 
 
 async def setup(bot):
