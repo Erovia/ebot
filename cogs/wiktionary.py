@@ -26,7 +26,7 @@ class WiktionaryCog(commands.Cog):
 			embed = discord.Embed(title = f'The definition(s) of "{word}":', colour = discord.Colour.og_blurple(), url = f'https://en.wiktionary.org/wiki/{word}')
 			embed.set_footer(text = f'asked by {interaction.user.name}\nsource: Wiktionary')
 			for desc in descriptions:
-				definitions = '\n\n'.join([_def['definition'].strip() for _def in desc['definitions'] if 'mw-reference-text' not in _def['definition']])
+				definitions = '\n\n'.join([_def['definition'].strip() for _def in desc['definitions'] if _def['definition'] != '' and 'mw-reference-text' not in _def['definition']])
 				soup = BeautifulSoup(definitions, 'html.parser')
 				if len(soup.text) >= 1024:
 					# Discord limits the text length for embed fields at 1024 characters
