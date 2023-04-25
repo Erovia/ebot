@@ -43,13 +43,19 @@ class DailyDraculaCog(commands.Cog):
 			footer = f'--- Post end for {today:%b} {today.day} ---'
 			try:
 				dracula = self.DRACULA[day]
-				message = [header]
-				message += textwrap.wrap(dracula, width = CHAR_LIMIT, replace_whitespace = False, drop_whitespace = False)
-				message += [footer]
+				messages = textwrap.wrap(dracula, width = CHAR_LIMIT, replace_whitespace = False, drop_whitespace = False)
 				channel = self.bot.get_channel(self.CHANNEL_ID)
 				self.logger.debug(f'Posting for {today}')
-				for msg in message:
-					await channel.send(msg)
+				await channel.send(header)
+				initial_message = await channel.send(messages[0])
+				thread = None
+				if len(messages) > 1:
+					self.logger.debug('Long post, created thread...')
+					thread = await initial_message.create_thread(name = f'The events of {today:%b} {today.day}')
+				for i, msg in enumerate(messages):
+					if i > 0:
+						await thread.send(msg)
+				await channel.send(footer)
 			except KeyError:
 				msg = f'No post for {day}'
 				if interaction is not None:
