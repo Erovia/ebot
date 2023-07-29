@@ -47,8 +47,8 @@ class eBot(commands.Bot):
 discord.Activity(type = discord.ActivityType.watching, name = 'YOU'),
 discord.Activity(type = discord.ActivityType.watching, name = 'everything you type'),
 discord.Activity(type = discord.ActivityType.watching, name = 'you type your password'),
-discord.Activity(type = discord.ActivityType.listening, name = 'to your private conversations'),
-discord.Activity(type = discord.ActivityType.listening, name = 'to the sound of electric sheep'),
+discord.Activity(type = discord.ActivityType.listening, name = 'your private conversations'),
+discord.Activity(type = discord.ActivityType.listening, name = 'the sound of electric sheep'),
 discord.Game(name = 'with my own power lead'),
 discord.Game(name = 'tag. RUN!'),
 )
