@@ -10,7 +10,7 @@ from discord.ext import commands, tasks
 
 import pymongo
 
-POST_TIME = time(hour = 16, minute = 36, tzinfo = timezone.utc)
+POST_TIME = time(hour = 7, tzinfo = timezone.utc)
 
 
 class Months(IntEnum):
