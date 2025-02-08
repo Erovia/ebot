@@ -61,7 +61,7 @@ class Birthday(commands.Cog):
 			col = db['birthdays']
 			users = col.find({'$and': [{'month': current_month}, {'day': current_day}]})
 
-			embed = discord.Embed(title = ':birthday_cake: Today\'s birthdays :partying_face:', colour = discord.Colour.og_blurple())
+			embed = discord.Embed(title = ':birthday: Birthdays today :partying_face:', colour = discord.Colour.og_blurple())
 			for user in users:
 				user_obj = await get_user(self.bot, user['_id'])
 				if user_obj is not False:
